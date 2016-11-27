@@ -1,5 +1,5 @@
 import tensorflow as tf
-from tensorflow.models.rnn import rnn_cell
+# from tensorflow.models.rnn import tf.nn.rnn_cell
 
 import numpy as np
 import random
@@ -12,27 +12,31 @@ class Model():
     self.args = args
 
     if args.model == 'rnn':
-      cell_fn = rnn_cell.BasicRNNCell
+      cell_fn = tf.nn.rnn_cell.BasicRNNCell
     elif args.model == 'gru':
-      cell_fn = rnn_cell.GRUCell
+      cell_fn = tf.nn.rnn_cell.GRUCell
     elif args.model == 'lstm':
-      cell_fn = rnn_cell.BasicLSTMCell
+      cell_fn = tf.nn.rnn_cell.BasicLSTMCell
     else:
       raise Exception("model type not supported: {}".format(args.model))
 
-    cell = cell_fn(args.rnn_size)
+    cell = cell_fn(args.rnn_size, state_is_tuple=False) #, state_is_tuple=True)
 
-    cell = rnn_cell.MultiRNNCell([cell] * args.num_layers)
+    cell = tf.nn.rnn_cell.MultiRNNCell([cell] * args.num_layers)
 
     if (infer == False and args.keep_prob < 1): # training mode
-      cell = rnn_cell.DropoutWrapper(cell, output_keep_prob = args.keep_prob)
+      cell = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob = args.keep_prob)
 
     self.cell = cell
-
+    # These are going through the feeds
     self.input_data = tf.placeholder(dtype=tf.float32, shape=[args.batch_size, args.seq_length, 5])
     self.target_data = tf.placeholder(dtype=tf.float32, shape=[args.batch_size, args.seq_length, 5])
     self.initial_state = cell.zero_state(batch_size=args.batch_size, dtype=tf.float32)
 
+    print "model: ", args.model
+    print "batch_size: ", args.batch_size
+    print "init: ", self.initial_state 
+    print "layers: ", args.num_layers
     self.num_mixture = args.num_mixture
     NOUT = 3 + self.num_mixture * 6 # [end_of_stroke + end_of_char, continue_with_stroke] + prob + 2*(mu + sig) + corr
 
@@ -71,21 +75,19 @@ class Model():
           output, new_state = cell(inp, states[-1])
 
           num_batches = self.args.batch_size # new_state.get_shape()[0].value
-          num_state = new_state.get_shape()[1].value
+          print "new_state", new_state
+          state_list = []
+          for state_index in [0, 1]:
+            num_state = new_state[state_index].get_shape()[1].value
+            eoc_detection = inp[:, 3]
+            eoc_detection = tf.reshape(eoc_detection, [num_batches, 1])
 
-          # if the input has an end-of-character signal, have to zero out the state
+            eoc_detection_state = tfrepeat(eoc_detection, num_state)
 
-          #to do:  test this code.
-
-          eoc_detection = inp[:,3]
-          eoc_detection = tf.reshape(eoc_detection, [num_batches, 1])
-
-          eoc_detection_state = tfrepeat(eoc_detection, num_state)
-
-          eoc_detection_state = tf.greater(eoc_detection_state, tf.zeros_like(eoc_detection_state, dtype=tf.float32))
-
-          new_state = tf.select(eoc_detection_state, initial_state, new_state)
-
+            eoc_detection_state = tf.greater(eoc_detection_state, tf.zeros_like(eoc_detection_state, dtype=tf.float32))
+            print "eoc_detection_state", eoc_detection_state
+            state_list.append(tf.select(eoc_detection_state, initial_state[state_index], new_state[state_index]))
+          new_state = tuple(state_list)
           outputs.append(output)
           states.append(new_state)
       return outputs, states
