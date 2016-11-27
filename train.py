@@ -64,10 +64,10 @@ def train(args):
     saver = tf.train.Saver(tf.all_variables())
 
     # load previously trained model if appilcable
-    ckpt = tf.train.get_checkpoint_state(os.path.join('save', args.dataset_name))
-    if ckpt:
-      print "loading last model: ",ckpt.model_checkpoint_path
-      saver.restore(sess, ckpt.model_checkpoint_path)
+    # ckpt = tf.train.get_checkpoint_state(os.path.join('save', args.dataset_name))
+    # if ckpt:
+    #   print "loading last model: ",ckpt.model_checkpoint_path
+    #   saver.restore(sess, ckpt.model_checkpoint_path)
 
     def save_model():
       checkpoint_path = os.path.join('save', args.dataset_name, 'model.ckpt')
@@ -77,7 +77,8 @@ def train(args):
     for e in xrange(args.num_epochs):
       sess.run(tf.assign(model.lr, args.learning_rate * (args.decay_rate ** e)))
       data_loader.reset_index_pointer()
-      state = model.initial_state.eval()
+      print "eval!"
+      state = sess.run(model.initial_state) # .eval()
       while data_loader.epoch_finished == False:
         start = time.time()
         input_data, target_data = data_loader.next_batch()
