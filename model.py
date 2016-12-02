@@ -4,6 +4,9 @@ import tensorflow as tf
 import numpy as np
 import random
 
+from tensorflow.python.ops.rnn_cell import LSTMStateTuple
+
+
 class Model():
   def __init__(self, args, infer=False):
     if infer:
@@ -19,8 +22,9 @@ class Model():
       cell_fn = tf.nn.rnn_cell.BasicLSTMCell
     else:
       raise Exception("model type not supported: {}".format(args.model))
+
     if args.model != 'gru':
-      cell = cell_fn(args.rnn_size, state_is_tuple=False) #, state_is_tuple=True)
+      cell = cell_fn(args.rnn_size, state_is_tuple=True) #, state_is_tuple=True)
     else:
       cell = cell_fn(args.rnn_size)
 
@@ -80,15 +84,30 @@ class Model():
           # print "new_state", new_state
           state_list = []
           for state_index in [0, 1]:
-            num_state = new_state[state_index].get_shape()[1].value
+            # c
+            num_state = new_state[state_index].c.get_shape()[1].value
             eoc_detection = inp[:, 3]
             eoc_detection = tf.reshape(eoc_detection, [num_batches, 1])
 
             eoc_detection_state = tfrepeat(eoc_detection, num_state)
 
             eoc_detection_state = tf.greater(eoc_detection_state, tf.zeros_like(eoc_detection_state, dtype=tf.float32))
-            # print "eoc_detection_state", eoc_detection_state
-            state_list.append(tf.select(eoc_detection_state, initial_state[state_index], new_state[state_index]))
+
+            print "eoc_detection_state", eoc_detection_state
+            c = tf.select(eoc_detection_state, initial_state[state_index].c, new_state[state_index].c)
+
+            # h
+            num_state = new_state[state_index].h.get_shape()[1].value
+            eoc_detection = inp[:, 3]
+            eoc_detection = tf.reshape(eoc_detection, [num_batches, 1])
+
+            eoc_detection_state = tfrepeat(eoc_detection, num_state)
+
+            eoc_detection_state = tf.greater(eoc_detection_state, tf.zeros_like(eoc_detection_state, dtype=tf.float32))
+            print "eoc_detection_state", eoc_detection_state
+            h = tf.select(eoc_detection_state, initial_state[state_index].c, new_state[state_index].h)
+
+            state_list.append(LSTMStateTuple(c, h))
           new_state = tuple(state_list)
           outputs.append(output)
           states.append(new_state)
