@@ -19,8 +19,10 @@ class Model():
       cell_fn = tf.nn.rnn_cell.BasicLSTMCell
     else:
       raise Exception("model type not supported: {}".format(args.model))
-
-    cell = cell_fn(args.rnn_size, state_is_tuple=False) #, state_is_tuple=True)
+    if args.model != 'gru':
+      cell = cell_fn(args.rnn_size, state_is_tuple=False) #, state_is_tuple=True)
+    else:
+      cell = cell_fn(args.rnn_size)
 
     cell = tf.nn.rnn_cell.MultiRNNCell([cell] * args.num_layers)
 
@@ -33,10 +35,10 @@ class Model():
     self.target_data = tf.placeholder(dtype=tf.float32, shape=[args.batch_size, args.seq_length, 5])
     self.initial_state = cell.zero_state(batch_size=args.batch_size, dtype=tf.float32)
 
-    print "model: ", args.model
-    print "batch_size: ", args.batch_size
-    print "init: ", self.initial_state 
-    print "layers: ", args.num_layers
+    # print "model: ", args.model
+    # print "batch_size: ", args.batch_size
+    # print "init: ", self.initial_state 
+    # print "layers: ", args.num_layers
     self.num_mixture = args.num_mixture
     NOUT = 3 + self.num_mixture * 6 # [end_of_stroke + end_of_char, continue_with_stroke] + prob + 2*(mu + sig) + corr
 
@@ -75,7 +77,7 @@ class Model():
           output, new_state = cell(inp, states[-1])
 
           num_batches = self.args.batch_size # new_state.get_shape()[0].value
-          print "new_state", new_state
+          # print "new_state", new_state
           state_list = []
           for state_index in [0, 1]:
             num_state = new_state[state_index].get_shape()[1].value
@@ -85,7 +87,7 @@ class Model():
             eoc_detection_state = tfrepeat(eoc_detection, num_state)
 
             eoc_detection_state = tf.greater(eoc_detection_state, tf.zeros_like(eoc_detection_state, dtype=tf.float32))
-            print "eoc_detection_state", eoc_detection_state
+            # print "eoc_detection_state", eoc_detection_state
             state_list.append(tf.select(eoc_detection_state, initial_state[state_index], new_state[state_index]))
           new_state = tuple(state_list)
           outputs.append(output)
@@ -191,7 +193,7 @@ class Model():
         accumulate += pdf[i]
         if (accumulate >= x):
           return i
-      print 'error with sampling ensemble'
+      # print 'error with sampling ensemble'
       return -1
 
     def sample_gaussian_2d(mu1, mu2, s1, s2, rho):
@@ -204,7 +206,7 @@ class Model():
     #prev_x[0, 0, 2] = 1 # initially, we want to see beginning of new stroke
     #prev_x[0, 0, 3] = 1 # initially, we want to see beginning of new character/content
     prev_state = sess.run(self.cell.zero_state(self.args.batch_size, tf.float32))
-
+    # print prev_state
     strokes = np.zeros((num, 5), dtype=np.float32)
     mixture_params = []
 
