@@ -7,7 +7,7 @@ import random
 from tensorflow.python.ops.rnn_cell import LSTMStateTuple
 
 
-class Model():
+class Model:
   def __init__(self, args, infer=False):
     if infer:
       args.batch_size = 1
@@ -222,8 +222,8 @@ class Model():
       return x[0][0], x[0][1]
 
     prev_x = np.zeros((1, 1, 5), dtype=np.float32)
-    #prev_x[0, 0, 2] = 1 # initially, we want to see beginning of new stroke
-    #prev_x[0, 0, 3] = 1 # initially, we want to see beginning of new character/content
+    # prev_x[0, 0, 2] = 1 # initially, we want to see beginning of new stroke
+    # prev_x[0, 0, 3] = 1 # initially, we want to see beginning of new character/content
     prev_state = sess.run(self.cell.zero_state(self.args.batch_size, tf.float32))
     # print prev_state
     strokes = np.zeros((num, 5), dtype=np.float32)
