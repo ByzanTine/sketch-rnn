@@ -13,7 +13,7 @@ class Model:
       args.batch_size = 1
       args.seq_length = 1
     self.args = args
-
+    args.model = 'gru'
     if args.model == 'rnn':
       cell_fn = tf.nn.rnn_cell.BasicRNNCell
     elif args.model == 'gru':
@@ -38,6 +38,7 @@ class Model:
     self.input_data = tf.placeholder(dtype=tf.float32, shape=[args.batch_size, args.seq_length, 5])
     self.target_data = tf.placeholder(dtype=tf.float32, shape=[args.batch_size, args.seq_length, 5])
     self.initial_state = cell.zero_state(batch_size=args.batch_size, dtype=tf.float32)
+    self.wanted_data = tf.placeholder(dtype=tf.float32, shape=[args.batch_size, 300, 5])
 
     # print "model: ", args.model
     # print "batch_size: ", args.batch_size
@@ -68,46 +69,42 @@ class Model:
       return result
 
     def custom_rnn_autodecoder(decoder_inputs, initial_input, initial_state, cell, scope=None):
+      '''
+
+      :param decoder_inputs: strokes info with shape (1, 5). List of strokes.
+      :param initial_input:
+      :param initial_state:
+      :param cell:
+      :param scope:
+      :return:
+      '''
       # customized rnn_decoder for the task of dealing with end of character
       with tf.variable_scope(scope or "rnn_decoder"):
         states = [initial_state]
         outputs = []
         prev = None
 
+        flat_wanted_data = tf.reshape(self.wanted_data, [self.args.batch_size, -1])
         for i in xrange(len(decoder_inputs)):
-          inp = decoder_inputs[i]
+          inp = decoder_inputs[i] # (1, 5)
           if i > 0:
             tf.get_variable_scope().reuse_variables()
-          output, new_state = cell(inp, states[-1])
+          new_input = tf.concat(1, [inp, flat_wanted_data])
+          output, new_state = cell(new_input, states[-1])
 
           num_batches = self.args.batch_size # new_state.get_shape()[0].value
           # print "new_state", new_state
           state_list = []
           for state_index in [0, 1]:
-            # c
-            num_state = new_state[state_index].c.get_shape()[1].value
+            num_state = new_state[state_index].get_shape()[1].value
             eoc_detection = inp[:, 3]
             eoc_detection = tf.reshape(eoc_detection, [num_batches, 1])
 
             eoc_detection_state = tfrepeat(eoc_detection, num_state)
 
             eoc_detection_state = tf.greater(eoc_detection_state, tf.zeros_like(eoc_detection_state, dtype=tf.float32))
-
-            print "eoc_detection_state", eoc_detection_state
-            c = tf.select(eoc_detection_state, initial_state[state_index].c, new_state[state_index].c)
-
-            # h
-            num_state = new_state[state_index].h.get_shape()[1].value
-            eoc_detection = inp[:, 3]
-            eoc_detection = tf.reshape(eoc_detection, [num_batches, 1])
-
-            eoc_detection_state = tfrepeat(eoc_detection, num_state)
-
-            eoc_detection_state = tf.greater(eoc_detection_state, tf.zeros_like(eoc_detection_state, dtype=tf.float32))
-            print "eoc_detection_state", eoc_detection_state
-            h = tf.select(eoc_detection_state, initial_state[state_index].c, new_state[state_index].h)
-
-            state_list.append(LSTMStateTuple(c, h))
+            # print "eoc_detection_state", eoc_detection_state
+            state_list.append(tf.select(eoc_detection_state, initial_state[state_index], new_state[state_index]))
           new_state = tuple(state_list)
           outputs.append(output)
           states.append(new_state)
@@ -221,6 +218,14 @@ class Model:
       x = np.random.multivariate_normal(mean, cov, 1)
       return x[0][0], x[0][1]
 
+    from utils import SketchLoader
+    loader = SketchLoader(batch_size=1)
+    raw_data = loader.raw_data[51]
+    print 'raw_data=\n%s' % raw_data
+
+    input_data, target_data = loader.next_batch()
+
+
     prev_x = np.zeros((1, 1, 5), dtype=np.float32)
     # prev_x[0, 0, 2] = 1 # initially, we want to see beginning of new stroke
     # prev_x[0, 0, 3] = 1 # initially, we want to see beginning of new character/content
@@ -231,7 +236,7 @@ class Model:
 
     for i in xrange(num):
 
-      feed = {self.input_data: prev_x, self.initial_state:prev_state}
+      feed = {self.input_data: prev_x, self.initial_state: prev_state, self.wanted_data: target_data}
 
       [o_pi, o_mu1, o_mu2, o_sigma1, o_sigma2, o_corr, o_pen, next_state] = sess.run([self.pi, self.mu1, self.mu2, self.sigma1, self.sigma2, self.corr, self.pen, self.final_state],feed)
 

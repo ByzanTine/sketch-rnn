@@ -82,7 +82,7 @@ def train(args):
       while data_loader.epoch_finished == False:
         start = time.time()
         input_data, target_data = data_loader.next_batch()
-        feed = {model.input_data: input_data, model.target_data: target_data, model.initial_state: state}
+        feed = {model.input_data: input_data, model.target_data: target_data, model.initial_state: state, model.wanted_data: target_data}
         train_loss, shape_loss, pen_loss, state, _ = sess.run([model.cost, model.cost_shape, model.cost_pen, model.final_state, model.train_op], feed)
         end = time.time()
         b_processed += 1
@@ -92,6 +92,9 @@ def train(args):
             e, b_processed ,train_loss, shape_loss, pen_loss, end - start)
         # assert( train_loss != np.NaN or train_loss != np.Inf) # doesn't work.
         assert( train_loss < 30000) # if dodgy loss, exit w/ error.
+        # TODO remove this hack
+        save_model()
+        break
         if (b_processed) % args.save_every == 0 and ((b_processed) > 0):
           save_model()
     save_model()

@@ -267,6 +267,46 @@ class SketchLoader():
 
     return batch[:,0:-1], batch[:, 1:]
 
+  def get_wanted_data(self, index):
+    def next_seq(n):
+      result = np.zeros((n, 5), dtype=np.float32)  # x, y, [eos, eoc, cont] tokens
+      # result[0, 2:4] = 1 # set eos and eoc to true for first point
+      # experimental line below, put a random factor between 70-130% to generate more examples
+      rand_scale_factor_x = np.random.rand() * 0.6 + 0.7
+      rand_scale_factor_y = np.random.rand() * 0.6 + 0.7
+      idx = 0
+      data = self.raw_data[index]
+      for i in xrange(n):
+        result[i, 0:4] = data[idx]  # eoc = 0.0
+        result[i, 4] = 1  # continue on stroke
+        if (result[i, 2] > 0 or result[i, 3] > 0):
+          result[i, 4] = 0
+        idx += 1
+        if (idx >= len(data) - 1):  # skip to next sketch example next time and mark eoc
+          result[i, 4] = 0
+          result[i, 3] = 1
+          result[i, 2] = 0  # overrides end of stroke one-hot
+          idx = 0
+          self.tick_index_pointer()
+          data = self.raw_data[index]
+        assert (result[i, 2:5].sum() == 1)
+      self.tick_index_pointer()  # needed if seq_length is less than last data.
+      result[:, 0] *= rand_scale_factor_x
+      result[:, 1] *= rand_scale_factor_y
+      return result
+
+    skip_length = self.seq_length + 1
+
+    batch = []
+
+    for i in xrange(self.batch_size):
+      seq = next_seq(skip_length)
+      batch.append(seq)
+
+    batch = np.array(batch, dtype=np.float32)
+
+    return batch[:, 0:-1], batch[:, 1:]
+
   def current_data(self):
     return self.raw_data[self.index[self.pointer]]
 
